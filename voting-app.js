@@ -1364,7 +1364,7 @@ function aggregateRow(a,i){const s=a.sums[i];return {name:METHODS[i],cw:a.cwExis
 function pctString(x,digits=1){return x===null||!Number.isFinite(x)?'—':x.toFixed(digits)+'%';}
 function updateBatchUI(){if(!sweep)return;const a=sweep.total;$('kCount').textContent=fmt(a.n);$('kCW').textContent=pctString(per(a.cwExists,a.n));$('kCycle').textContent=pctString(per(a.cycles,a.n));$('kShift').textContent=pctString(per(a.shifts,a.n));$('kBroad').textContent=a.n?fmt(a.sums[0].omitted)+' / '+fmt(a.n):'—';
  $('batchStatus').textContent=fmt(a.n)+(sweep.target?' / '+fmt(sweep.target):' / ∞')+(sweep.precomputed?' · precomputed seed '+sweep.params.seed:sweep.running?' · running':' · stopped/completed');$('batchProgress').style.width=sweep.target?(100*a.n/sweep.target).toFixed(3)+'%':a.n?'100%':'0%';
- const rows=[0,1,2].map(i=>aggregateRow(a,i));$('batchTable').innerHTML=rows.map((r,i)=>'<tr><td style="font-weight:750;color:'+COLORS[i]+'">'+r.name+'</td><td>'+pctString(r.cw)+'</td><td>'+pctString(r.favor)+'</td><td>'+pctString(r.omitted)+'</td><td>'+pctString(r.removed)+'</td><td>'+r.rounds.toFixed(2)+'</td></tr>').join('');
+ const rows=[0,1,2].map(i=>aggregateRow(a,i));$('batchTable').innerHTML=rows.map((r,i)=>'<tr><td style="font-weight:750;color:'+COLORS[i]+'">'+r.name+'</td><td>'+pctString(r.cw)+'</td><td>'+pctString(r.favor)+'</td><td>'+pctString(r.omitted)+'</td><td>'+pctString(r.removed)+'</td><td>'+(Number.isFinite(r.rounds)?r.rounds.toFixed(2):'—')+'</td></tr>').join('');
  $('exportCSV').disabled=a.n===0;
  const names=sweep.labels||REGIMES;
  const covered=names.map((name,i)=>({name,n:sweep.byRegime[i]?.n||0})).filter(x=>x.n>0);
@@ -1430,7 +1430,7 @@ function initCompact(){
  $('step').addEventListener('click',phaseStep);$('play').addEventListener('click',auditoriumPlay);$('pause').addEventListener('click',auditoriumPause);$('reset').addEventListener('click',configureSingle);$('applyCustom').addEventListener('click',()=>{presetId='custom';$('presetDesc').textContent='Custom electorate — explicit round shifts, approval sets and pairwise overrides apply.';configureSingle();});
  for(const id of ['currentMode','precedence','tieMode','approvalMode','approvalTopN'])$(id).addEventListener('change',configureSingle);
  $('speed').addEventListener('input',refreshAuditorium);
- $('tabLive').addEventListener('click',()=>selectTab('live'));$('tabBatch').addEventListener('click',()=>selectTab('batch'));
+ // Separate pages use ordinary navigation links, never in-page tab toggling.
  $('conditionList').innerHTML=PRESETS.map(p=>'<label><input type="checkbox" value="'+escapeHtml(p.id)+'" checked><span>'+escapeHtml(p.title)+(EXACT_CASES.has(p.id)?' <small>(exact boundary)</small>':'')+'</span><input class="caseWeight" type="number" min="0" max="1000" step="0.5" value="1" aria-label="Relative weight for '+escapeHtml(p.title)+'" title="Relative sampling weight"></label>').join('');
  const caseStatus=()=>{const n=Object.keys(selectedCaseWeights()).length,ws=Object.values(selectedCaseWeights()),total=ws.reduce((a,b)=>a+b,0);$('conditionSummary').textContent=n+' of '+PRESETS.length+' active · '+total.toFixed(1)+' total weight';};
  $('conditionList').addEventListener('change',caseStatus);
@@ -1443,7 +1443,7 @@ function initCompact(){
  $('runBatch').addEventListener('click',startBatch);$('stopBatch').addEventListener('click',stopBatch);$('chartAxis').addEventListener('change',drawPlot);$('chartMetric').addEventListener('change',drawPlot);$('exportCSV').addEventListener('click',exportRegimeCSV);$('testButton').addEventListener('click',showTests);
  for(const [input,label] of [['volatility','volLabel'],['cycles','cycleLabel'],['breadth','breadthLabel']])$(input).addEventListener('input',()=>{$(label).textContent=$(input).value+'%';});
  $('frontier').addEventListener('mousemove',e=>{const box=$('frontier').getBoundingClientRect(),x=e.clientX-box.left,y=e.clientY-box.top;let found=null,d=18*18;for(const hit of plotHits){const dist=(hit.x-x)**2+(hit.y-y)**2;if(dist<d){found=hit;d=dist;}}
- $('chartTip').textContent=found?found.method+' · '+found.regime+' · '+fmt(found.n)+' trials · CW kept '+pctString(found.cw)+' · approval leader omitted '+pctString(found.omitted)+' · '+found.rounds.toFixed(2)+' ballots'+(found.frontier?' · on frontier':''):'Hover over a dot to inspect its scenario regime.';});
+ $('chartTip').textContent=found?found.method+' · '+found.regime+' · '+fmt(found.n)+' trials · CW kept '+pctString(found.cw)+' · approval leader omitted '+pctString(found.omitted)+' · '+(Number.isFinite(found.rounds)?found.rounds.toFixed(2):'—')+' ballots'+(found.frontier?' · on frontier':''):'Hover over a dot to inspect its scenario regime.';});
  window.addEventListener('resize',()=>{if(!$('batchView').classList.contains('hide')){drawPlot();drawEffectChart();}});
  $('outcomeTerm').addEventListener('change',()=>{$('customOutcomeTerm').classList.toggle('hide',$('outcomeTerm').value!=='custom');renderSingle();refreshAuditorium();});
  $('customOutcomeTerm').addEventListener('input',()=>{renderSingle();refreshAuditorium();});
