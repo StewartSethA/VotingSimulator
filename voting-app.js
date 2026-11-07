@@ -1242,7 +1242,7 @@ function batchSettings(){let minCand=+$('minCand').value,maxCand=+$('maxCand').v
  if(!Number.isInteger(minCand)||!Number.isInteger(maxCand)||minCand<2||maxCand>12||minCand>maxCand)throw Error('Candidate range must be within 2–12, min ≤ max.');
  if(!Number.isInteger(blocs)||blocs<6||blocs>80)throw Error('Voter groups must be 6–80.');
  const source=$('population').value,weights=selectedCaseWeights(),cases=Object.keys(weights),variation=+$('caseVariation').value/100,share=+$('caseShare').value/100;
- if(source!=='random'&&!cases.length)throw Error('Select at least one positive-weight named condition.');
+ if((source==='cases'||(source==='mixed'&&share>0))&&!cases.length)throw Error('Select at least one positive-weight named condition.');
  return {minCand,maxCand,blocs,vol,cycle,breadth,seed,source,cases,weights,variation,share,overlay:$('overlayNamed').checked};}
 function weightedPick(r,items){const total=items.reduce((sum,x)=>sum+x.weight,0);let q=r()*total;for(const x of items){q-=x.weight;if(q<0)return x;}return items[items.length-1];}
 function createSampler(params,seed){
@@ -1272,15 +1272,74 @@ function batchMessage(message){
  el.textContent=message||'';
  el.classList.toggle('hide',!message);
 }
-function startBatch(){if(sweep?.running||effectTask?.running)return;let params,model;
- try{params=batchSettings();model=createSampler(params,params.seed);}catch(e){$('batchStatus').textContent='Cannot start';batchMessage(e.message);return;}
- batchMessage('');
- const pool=model.pool,target=+$('trials').value;
- sweep={running:true,token:++sweepSequence,rng:model.rng,model,params,target,pool,labels:pool.map(x=>x.label),total:emptyAggregate(),byRegime:pool.map(emptyAggregate),byBin:pool.map(()=>Array.from({length:13},emptyAggregate)),byK:Array.from({length:13},emptyAggregate),lastRender:0,lockedCases:0,caseDraws:0,overlayDraws:0};
- $('runBatch').disabled=true;$('stopBatch').disabled=false;$('exportCSV').disabled=true;$('batchStatus').textContent='Starting…';setTimeout(()=>batchChunk(sweep.token),16);}
+let stressWorker=null;
+function installWorkerSweep(params,model,target){
+  const pool=model.pool;
+  sweep={running:true,token:++sweepSequence,rng:model.rng,model,params,target,pool,labels:pool.map(x=>x.label),total:emptyAggregate(),byRegime:pool.map(emptyAggregate),byBin:pool.map(()=>Array.from({length:13},emptyAggregate)),byK:Array.from({length:13},emptyAggregate),lastRender:0,lockedCases:0,caseDraws:0,overlayDraws:0};
+  $('runBatch').disabled=true;
+  $('stopBatch').disabled=false;
+  $('exportCSV').disabled=true;
+  $('batchStatus').textContent='Initializing stress test…';
+  $('batchProgress').style.width='0%';
+}
+function applyWorkerUpdate(message){
+  if(!sweep?.running || message.token!==sweep.token)return;
+  for(const key of ['total','byRegime','byBin','byK','caseDraws','lockedCases','overlayDraws']){
+    if(Object.prototype.hasOwnProperty.call(message,key))sweep[key]=message[key];
+  }
+  try{updateBatchUI();}catch(error){
+    sweep.error='Result display error: '+String(error?.message||error);
+    finishBatch();return;
+  }
+  if(message.type==='done')finishBatch();
+}
+function startBatch(){
+  if(sweep?.running||effectTask?.running)return;
+  let params,model;
+  try{params=batchSettings();model=createSampler(params,params.seed);}catch(error){
+    $('batchStatus').textContent='Cannot start';
+    batchMessage(String(error?.message||error));
+    return;
+  }
+  const target=Number($('trials').value);
+  if(!Number.isSafeInteger(target)||target<0){batchMessage('Invalid trial count.');return;}
+  batchMessage('');
+  installWorkerSweep(params,model,target);
+  const token=sweep.token;
+  try{
+    if(typeof Worker==='undefined')throw Error('Web Workers are unavailable');
+    const worker=new Worker('voting-stress-worker.js');
+    stressWorker=worker;
+    worker.onmessage=event=>{
+      const data=event.data||{};
+      if(!sweep?.running||data.token!==sweep.token)return;
+      if(data.type==='error'){
+        sweep.error='Stress worker error: '+String(data.error||'Unknown worker failure');
+        finishBatch();
+      }else if(data.type==='progress'||data.type==='done')applyWorkerUpdate(data);
+    };
+    worker.onerror=event=>{
+      if(!sweep?.running||sweep.token!==token)return;
+      const reason=event.message||'Worker could not start';
+      worker.terminate();stressWorker=null;
+      if(sweep.total.n===0){
+        $('batchStatus').textContent='Worker unavailable · using compatible mode';
+        setTimeout(()=>batchChunk(token),0);
+      }else{
+        sweep.error='Stress worker interrupted: '+reason;
+        finishBatch();
+      }
+    };
+    worker.postMessage({type:'start',token,params,target});
+  }catch(error){
+    if(stressWorker){stressWorker.terminate();stressWorker=null;}
+    $('batchStatus').textContent='Worker unavailable · using compatible mode';
+    setTimeout(()=>batchChunk(token),0);
+  }
+}
 function batchChunk(token){if(!sweep?.running||sweep.token!==token)return;const until=performance.now()+5;
  try{while(sweep.running&&(sweep.target===0||sweep.total.n<sweep.target)&&performance.now()<until){
-  const sampled=sampleElection(sweep.model,sweep.params);if(!sampled)continue;
+  const sampled=sampleElection(sweep.model,sweep.params);if(!sampled)throw Error('No sample generated. Verify candidate and condition settings.');
   const p=sampled.profile,index=sweep.pool.indexOf(sampled.item),outs=[fastElection(p,0),fastElection(p,1),fastElection(p,2)];
   if(sampled.item.type==='case'){sweep.caseDraws++;if(sampled.locked)sweep.lockedCases++;if(sampled.overlay)sweep.overlayDraws++;}
   addTrial(sweep.total,p,outs);addTrial(sweep.byRegime[index],p,outs);addTrial(sweep.byBin[index][p.k],p,outs);addTrial(sweep.byK[p.k],p,outs);
@@ -1292,6 +1351,7 @@ function batchChunk(token){if(!sweep?.running||sweep.token!==token)return;const 
  }catch(e){sweep.error='Display error: '+e.message;console.error(e);finishBatch();return;}
  if(sweep.running&&(sweep.target===0||sweep.total.n<sweep.target))setTimeout(()=>batchChunk(token),16);else finishBatch();}
 function finishBatch(){
+ if(stressWorker){stressWorker.terminate();stressWorker=null;}
  if(!sweep)return;
  sweep.running=false;
  $('runBatch').disabled=false;$('stopBatch').disabled=true;
