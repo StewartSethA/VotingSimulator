@@ -997,7 +997,8 @@ function drawAuditorium(){
    if(scene.phase==='counting'){g.strokeStyle='#d2b597';g.lineWidth=2.5;g.beginPath();g.moveTo(x+5,474);g.lineTo(x+15,486+moving);g.stroke();}
  }
  // Candidate-specific ballot/approval-mark piles grow only when tellers physically count ballots.
- const names=scene.h?.initialActive||[]; if(names.length){
+ const names=scene.h?.initialActive||[];
+ if(names.length){
   const width=785/names.length,baseY=503,maxPile=34;
   names.forEach((c,i)=>{
    const x=157+i*width, count=scene.votes[c]||0, cw=Math.max(8,Math.min(width-8,58));
