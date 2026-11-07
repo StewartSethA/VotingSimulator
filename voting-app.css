@@ -230,3 +230,9 @@ body:not(.advanced-mode) #singleView .audPanel{margin-bottom:0}
  #batchView .method-table{font-size:11px}
  #batchView .method-table th,#batchView .method-table td{padding:7px 5px}
 }
+
+/* Independent stress-test page and navigation */
+#singleView.hide,#batchView.hide{display:none!important}
+body.stress-page #singleView{display:none!important}
+body.stress-page #batchView{display:block!important}
+.tabs a.tab{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;font-weight:750}
