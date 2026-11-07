@@ -179,3 +179,54 @@ header .shell{max-width:1320px;padding:6px 12px}
 #outcomeTerm{min-width:96px!important;max-width:125px!important;flex:0 0 auto!important}
 #customOutcomeTerm{min-width:120px;flex:0 1 180px}
 @media(max-width:700px){#outcomeTerm{min-width:90px!important;max-width:115px!important}#customOutcomeTerm{flex:1 1 145px}}
+
+/* Basic-first experience: advanced tools are accessible from the top switch. */
+.advancedToggle{background:#273f59;color:#fff;border:1px solid #7b90a5;padding:5px 11px;min-height:32px;white-space:nowrap;font-size:13px}
+.advancedToggle:hover:not(:disabled){background:#385b7b}
+.advancedToggle[aria-pressed="true"]{background:#d7eaf6;color:#1b3f60;border-color:#92bed5}
+.advancedToggle span{font-size:11px;font-weight:600;opacity:.85;margin-left:3px}
+.mast{gap:9px}
+.mast .tabs{margin:0 0 0 auto}
+header .shell{padding-top:8px;padding-bottom:8px}
+body:not(.advanced-mode) #codePanel,
+body:not(.advanced-mode) #findingsPanel,
+body:not(.advanced-mode) #mobileViews,
+body:not(.advanced-mode) #singleView .audFold,
+body:not(.advanced-mode) #singleView #audComparison,
+body:not(.advanced-mode) #singleView #audTimeDifference,
+body:not(.advanced-mode) #singleView .audViewOptions,
+body:not(.advanced-mode) #singleView .audRule,
+body:not(.advanced-mode) #singleView .methodVotes,
+body:not(.advanced-mode) #singleView .summaryline,
+body:not(.advanced-mode) #singleView .decision,
+body:not(.advanced-mode) #batchView .kpis,
+body:not(.advanced-mode) #batchView .batchGrid > .chartbox:first-child,
+body:not(.advanced-mode) #batchView .sensitivity,
+body:not(.advanced-mode) #batchView > details:not(#caseDetails),
+body:not(.advanced-mode) #batchView #comparisonNote,
+body:not(.advanced-mode) footer {display:none!important}
+body:not(.advanced-mode) #batchView .batchGrid{display:block}
+body:not(.advanced-mode) #batchView .batchGrid > .chartbox:last-child{width:100%;padding:12px 14px}
+body:not(.advanced-mode) #batchView .batchGrid .sectioncopy{display:none}
+body:not(.advanced-mode) #batchView .batchGrid h2{font-size:16px}
+body:not(.advanced-mode) #batchView .batchGrid{margin-top:10px}
+body:not(.advanced-mode) #singleView>.methods{margin-bottom:7px}
+body:not(.advanced-mode) #singleView .methods .method{min-height:0}
+body:not(.advanced-mode) #singleView .method .outcome{min-height:0}
+body:not(.advanced-mode) #singleView .audPanel{margin-bottom:0}
+.batchError{background:#fff2f1;color:#a52a35;border:1px solid #e9aeb5;padding:9px 12px;border-radius:7px;font-weight:650;margin:7px 0 0}
+#batchView #batchStatus{font-weight:700}
+@media(max-width:700px){
+ .mast{display:flex;align-items:center;flex-wrap:wrap}
+ .mast h1{font-size:15px;flex:1 1 auto}
+ .mast .tabs{order:3;flex:1 1 100%;justify-content:center}
+ .mast .tabs .tab{flex:1 1 auto}
+ .advancedToggle{margin-left:auto;padding:4px 9px;min-height:30px}
+ body:not(.advanced-mode) #singleView[data-mobile-pane] > #codePanel,
+ body:not(.advanced-mode) #singleView[data-mobile-pane] > #findingsPanel{display:none!important}
+ #batchView .candidatePicker{max-width:100%}
+ #batchView .control{gap:7px}
+ #batchView .control select{flex:1 1 135px;max-width:100%}
+ #batchView .method-table{font-size:11px}
+ #batchView .method-table th,#batchView .method-table td{padding:7px 5px}
+}

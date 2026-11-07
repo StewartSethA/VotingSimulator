@@ -1144,7 +1144,7 @@ function renderSingle(){let valid=!!current,finished=!valid||Object.values(curre
 }
 function stepOnce(){if(!current)return;let changed=false;for(const s of Object.values(current))if(!s.done&&!s.blocked){nextBallot(s,currentScenario,opts());changed=true;}if(changed)steps++;renderSingle();if(Object.values(current).every(s=>s.done||s.blocked))stopLive();}
 function playLive(){auditoriumPlay();}
-function selectTab(which){const single=which==='live';if(!single)auditoriumPause();$('singleView').classList.toggle('hide',!single);$('batchView').classList.toggle('hide',single);for(const [id,active] of [['tabLive',single],['tabBatch',!single]]){$(id).classList.toggle('active',active);$(id).setAttribute('aria-selected',active?'true':'false');}if(!single)drawPlot();}
+function selectTab(which){const single=which==='live';if(!single)auditoriumPause();$('singleView').classList.toggle('hide',!single);$('batchView').classList.toggle('hide',single);for(const [id,active] of [['tabLive',single],['tabBatch',!single]]){$(id).classList.toggle('active',active);$(id).setAttribute('aria-selected',active?'true':'false');}if(!single&&document.body.classList.contains('advanced-mode'))drawPlot();}
 // ---------- Seeded, weighted Monte Carlo with dynamic choices and pairwise cycles ----------
 const COLORS=['#567da5','#9564ac','#148776'];
 const METHODS=['Existing','B2026-10','Approval adapter'];
@@ -1266,21 +1266,39 @@ function sampleElection(model,params){
  }
  return {profile:generateElection(r,{...params,minCand:k,maxCand:k},item.value),item,locked:false};
 }
+function batchMessage(message){
+ const el=$('batchError');
+ if(!el)return;
+ el.textContent=message||'';
+ el.classList.toggle('hide',!message);
+}
 function startBatch(){if(sweep?.running||effectTask?.running)return;let params,model;
- try{params=batchSettings();model=createSampler(params,params.seed);}catch(e){$('batchStatus').textContent=e.message;return;}
+ try{params=batchSettings();model=createSampler(params,params.seed);}catch(e){$('batchStatus').textContent='Cannot start';batchMessage(e.message);return;}
+ batchMessage('');
  const pool=model.pool,target=+$('trials').value;
  sweep={running:true,token:++sweepSequence,rng:model.rng,model,params,target,pool,labels:pool.map(x=>x.label),total:emptyAggregate(),byRegime:pool.map(emptyAggregate),byBin:pool.map(()=>Array.from({length:13},emptyAggregate)),byK:Array.from({length:13},emptyAggregate),lastRender:0,lockedCases:0,caseDraws:0,overlayDraws:0};
  $('runBatch').disabled=true;$('stopBatch').disabled=false;$('exportCSV').disabled=true;$('batchStatus').textContent='Starting…';setTimeout(()=>batchChunk(sweep.token),16);}
-function batchChunk(token){if(!sweep?.running||sweep.token!==token)return;const until=performance.now()+8;
+function batchChunk(token){if(!sweep?.running||sweep.token!==token)return;const until=performance.now()+5;
  try{while(sweep.running&&(sweep.target===0||sweep.total.n<sweep.target)&&performance.now()<until){
   const sampled=sampleElection(sweep.model,sweep.params);if(!sampled)continue;
   const p=sampled.profile,index=sweep.pool.indexOf(sampled.item),outs=[fastElection(p,0),fastElection(p,1),fastElection(p,2)];
   if(sampled.item.type==='case'){sweep.caseDraws++;if(sampled.locked)sweep.lockedCases++;if(sampled.overlay)sweep.overlayDraws++;}
   addTrial(sweep.total,p,outs);addTrial(sweep.byRegime[index],p,outs);addTrial(sweep.byBin[index][p.k],p,outs);addTrial(sweep.byK[p.k],p,outs);
- }}catch(e){sweep.running=false;$('batchStatus').textContent='Simulation error: '+e.message;console.error(e);finishBatch();return;}
- if(Date.now()-sweep.lastRender>700||!sweep.running||(sweep.target>0&&sweep.total.n>=sweep.target)){updateBatchUI();sweep.lastRender=Date.now();}
+ }}catch(e){sweep.error='Simulation error: '+e.message;console.error(e);finishBatch();return;}
+ try{
+  if(Date.now()-sweep.lastRender>500||!sweep.running||(sweep.target>0&&sweep.total.n>=sweep.target)){
+   updateBatchUI();sweep.lastRender=Date.now();
+  }
+ }catch(e){sweep.error='Display error: '+e.message;console.error(e);finishBatch();return;}
  if(sweep.running&&(sweep.target===0||sweep.total.n<sweep.target))setTimeout(()=>batchChunk(token),16);else finishBatch();}
-function finishBatch(){if(!sweep)return;sweep.running=false;$('runBatch').disabled=false;$('stopBatch').disabled=true;$('exportCSV').disabled=sweep.total.n===0;updateBatchUI();}
+function finishBatch(){
+ if(!sweep)return;
+ sweep.running=false;
+ $('runBatch').disabled=false;$('stopBatch').disabled=true;
+ $('exportCSV').disabled=sweep.total.n===0;
+ try{updateBatchUI();}catch(e){sweep.error=sweep.error||'Display error: '+e.message;}
+ if(sweep.error){batchMessage(sweep.error);$('batchStatus').textContent='Stopped with error after '+fmt(sweep.total.n)+' trials';}
+}
 function stopBatch(){if(!sweep?.running)return;sweep.running=false;finishBatch();}
 function aggregateRow(a,i){const s=a.sums[i];return {name:METHODS[i],cw:a.cwExists?100*s.cwKept/a.cwExists:null,omitted:a.n?100*s.omitted/a.n:null,removed:a.n?100*s.removed/a.n:null,rounds:a.n?s.rounds/a.n:null,favor:a.n?s.favor/a.n:null,sole:a.n?100*s.sole/a.n:null,cn:a.cwExists,n:a.n};}
 function pctString(x,digits=1){return x===null||!Number.isFinite(x)?'—':x.toFixed(digits)+'%';}
@@ -1298,10 +1316,10 @@ function updateBatchUI(){if(!sweep)return;const a=sweep.total;$('kCount').textCo
  }).join('')||'<tr><td colspan="7">No candidate-count data from this run.</td></tr>';
  const incompat=sweep.params.source==='random'?[]:sweep.params.cases.map(id=>({id,sizes:viableCaseSizes(id,sweep.params.minCand,sweep.params.maxCand)})).filter(x=>x.sizes.length!==sweep.params.maxCand-sweep.params.minCand+1);
  $('compatibilityNote').textContent=incompat.length?incompat.map(x=>PRESETS.find(p=>p.id===x.id).title+': '+(x.sizes.length?x.sizes.join(', ')+' candidates only':'not compatible')).join(' · '):'All selected conditions are compatible with the sampled candidate counts.';
- drawPlot();}
+ if(document.body.classList.contains('advanced-mode'))drawPlot();}
 function frontierPoints(points){const sorted=points.slice().sort((a,b)=>a.x-b.x||b.y-a.y),res=[];let high=-1;
  for(const p of sorted){if(p.y>high+1e-7){res.push(p);high=p.y;}}return res;}
-function drawPlot(){const c=$('frontier');if(!c||c.closest('.hide'))return;
+function drawPlot(){if(!document.body.classList.contains('advanced-mode'))return;const c=$('frontier');if(!c||c.closest('.hide'))return;
  const box=c.getBoundingClientRect(),w=Math.round(box.width)||800,h=Math.round(box.height)||335,dpr=Math.min(2,window.devicePixelRatio||1);if(c.width!==w*dpr||c.height!==h*dpr){c.width=w*dpr;c.height=h*dpr;}const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
  const L=51,R=17,T=15,B=42,W=Math.max(50,w-L-R),H=Math.max(70,h-T-B),axis=$('chartAxis').value,metric=$('chartMetric').value,xmin=axis==='rounds'?1:0,hiOmit=sweep?.byBin?.flatMap(aa=>aa.flatMap(a=>a.n>=30?a.sums.map(s=>100*s.omitted/a.n):[]))||[],xmax=axis==='rounds'?3.5:Math.min(100,Math.max(10,Math.ceil((Math.max(0,...hiOmit)+3)/10)*10)),xF=x=>L+(x-xmin)/(xmax-xmin)*W,yF=y=>T+(100-y)/100*H;plotHits=[];
  ctx.font='11px system-ui';ctx.fillStyle='#647487';ctx.strokeStyle='#e6ebf0';ctx.lineWidth=1;for(let j=0;j<=4;j++){const y=j*25;ctx.beginPath();ctx.moveTo(L,yF(y));ctx.lineTo(L+W,yF(y));ctx.stroke();ctx.fillText(y+'%',L-35,yF(y)+4);}
@@ -1340,6 +1358,14 @@ function extraTests(){let n=0;function check(name,truth){if(!truth)throw Error(n
 }
 function showTests(){try{const a=tests().length,b=extraTests(),c=conditionSamplesCheck();$('testsStatus').textContent='PASS · '+a+' original checks + '+b+' Monte Carlo invariants + '+c+' conditioned cases';}catch(e){$('testsStatus').textContent='FAILED · '+e.message;$('testsStatus').style.color='#b12e3d';console.error(e);}}
 function initCompact(){
+ // Keep the accessible basic simulator and stress results visible by default.
+ const advancedButton=$('advancedToggle');
+ advancedButton.addEventListener('click',()=>{
+  const on=document.body.classList.toggle('advanced-mode');
+  advancedButton.setAttribute('aria-pressed',String(on));
+  $('advancedToggleMark').textContent=on?'On':'Off';
+  if(on && !$('batchView').classList.contains('hide')){requestAnimationFrame(()=>{drawPlot();drawEffectChart();});}
+ });
  initRuleEditor();document.querySelectorAll('#mobileViews button').forEach(b=>b.addEventListener('click',()=>{const pane=b.dataset.pane;$('singleView').dataset.mobilePane=pane;document.querySelectorAll('#mobileViews button').forEach(x=>x.classList.toggle('selected',x===b));if(pane==='code'){ruleRenderKey='';renderRuleCode();}}));$('preset').innerHTML='<option value="random">🎲 Random election</option>'+PRESETS.map(p=>'<option value="'+escapeHtml(p.id)+'">'+escapeHtml(p.title)+'</option>').join('');$('preset').addEventListener('change',e=>loadPresetCompact(e.target.value));$('newRandom').addEventListener('click',newRandomElection);$('liveCandidates').addEventListener('change',newRandomElection);
  $('step').addEventListener('click',phaseStep);$('play').addEventListener('click',auditoriumPlay);$('pause').addEventListener('click',auditoriumPause);$('reset').addEventListener('click',configureSingle);$('applyCustom').addEventListener('click',()=>{presetId='custom';$('presetDesc').textContent='Custom electorate — explicit round shifts, approval sets and pairwise overrides apply.';configureSingle();});
  for(const id of ['currentMode','precedence','tieMode','approvalMode','approvalTopN'])$(id).addEventListener('change',configureSingle);
